@@ -1,20 +1,23 @@
-From 1559ec2b311bccb7b3cc72753d9022fe7ea2f125 Mon Sep 17 00:00:00 2001
+From dde90bfaed0a662baaebeca0eab75e863adb6751 Mon Sep 17 00:00:00 2001
 From: Wojciech Szpucha <szpuszi@gmail.com>
 Date: Thu, 12 Nov 2026 16:58:27 +0100
 Subject: [PATCH] tools api io: Return high-bit bytes as unsigned characters
 
-On targets where plain char is signed, io__get_char() sign-extends bytes
-with the high bit set. For example, 0x80 becomes -128 and 0xff becomes -1.
-Callers such as io__getdelim() interpret these values as end of input,
-truncating strings containing non-ASCII bytes. The proc maps pathname
-reader in perf also treats negative character values as end of input.
+When libapi is built on a target where plain char is signed,
+io__get_char() sign-extends bytes with the high bit set. For example,
+0x80 becomes -128 and 0xff becomes -1. io__getdelim() treats these values
+as end of input and silently truncates non-ASCII strings. This affects
+filename__read_str() in a standalone libapi build with the default flags.
 
 Convert the byte to unsigned char before promoting it to int, matching
 the documented fgetc-like semantics and keeping all byte values distinct
 from the end-of-input return value.
 
 Extend the perf API IO tests to check high-bit bytes and a line containing
-UTF-8 and 0xff across buffer refills, followed by an ASCII line.
+UTF-8 and 0xff across buffer refills, followed by an ASCII line. Compile
+this test with -fsigned-char so that perf's global -funsigned-char does
+not hide the problem. The default perf build already avoids this issue
+through that global flag.
 
 The issue was identified and the fix and regression tests were prepared
 with Codex assistance.
@@ -22,8 +25,9 @@ with Codex assistance.
 Fixes: e95770af4c4a ("tools api: Add a lightweight buffered reading api")
 ---
  tools/lib/api/io.h        |  2 +-
+ tools/perf/tests/Build    |  1 +
  tools/perf/tests/api-io.c | 33 ++++++++++++++++++++++++++++++++-
- 2 files changed, 33 insertions(+), 2 deletions(-)
+ 3 files changed, 34 insertions(+), 2 deletions(-)
 
 diff --git a/tools/lib/api/io.h b/tools/lib/api/io.h
 index 1731996b..25e2008d 100644
@@ -38,6 +42,18 @@ index 1731996b..25e2008d 100644
  }
  
  /* Read a hexadecimal value with no 0x prefix into the out argument hex. If the
+diff --git a/tools/perf/tests/Build b/tools/perf/tests/Build
+index 58858f3d..c3ba1fca 100644
+--- a/tools/perf/tests/Build
++++ b/tools/perf/tests/Build
+@@ -79,6 +79,7 @@ perf-test-$(CONFIG_DWARF_UNWIND) += dwarf-unwind.o
+ endif
+ 
+ CFLAGS_dwarf-unwind.o += -fno-optimize-sibling-calls
++CFLAGS_api-io.o += -fsigned-char
+ 
+ perf-test-y += workloads/
+ 
 diff --git a/tools/perf/tests/api-io.c b/tools/perf/tests/api-io.c
 index 0ba3d5cc..f283712e 100644
 --- a/tools/perf/tests/api-io.c
