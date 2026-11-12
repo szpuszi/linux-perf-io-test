@@ -1,0 +1,32 @@
+name: Linux perf IO regression
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    if: github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y build-essential git flex bison pkg-config libelf-dev libdw-dev libunwind-dev libcap-dev libssl-dev zlib1g-dev libzstd-dev libslang2-dev libtraceevent-dev libtracefs-dev python3-dev python3-setuptools libperl-dev libnuma-dev
+      - name: Build perf and verify the regression
+        shell: bash
+        run: bash scripts/test.sh
+      - name: Preserve test results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: perf-io-test-results
+          path: logs/
+          retention-days: 1
+          if-no-files-found: ignore

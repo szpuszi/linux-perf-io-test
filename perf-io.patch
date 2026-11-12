@@ -1,0 +1,107 @@
+From 1559ec2b311bccb7b3cc72753d9022fe7ea2f125 Mon Sep 17 00:00:00 2001
+From: Wojciech Szpucha <szpuszi@gmail.com>
+Date: Thu, 12 Nov 2026 16:58:27 +0100
+Subject: [PATCH] tools api io: Return high-bit bytes as unsigned characters
+
+On targets where plain char is signed, io__get_char() sign-extends bytes
+with the high bit set. For example, 0x80 becomes -128 and 0xff becomes -1.
+Callers such as io__getdelim() interpret these values as end of input,
+truncating strings containing non-ASCII bytes. The proc maps pathname
+reader in perf also treats negative character values as end of input.
+
+Convert the byte to unsigned char before promoting it to int, matching
+the documented fgetc-like semantics and keeping all byte values distinct
+from the end-of-input return value.
+
+Extend the perf API IO tests to check high-bit bytes and a line containing
+UTF-8 and 0xff across buffer refills, followed by an ASCII line.
+
+The issue was identified and the fix and regression tests were prepared
+with Codex assistance.
+
+Fixes: e95770af4c4a ("tools api: Add a lightweight buffered reading api")
+---
+ tools/lib/api/io.h        |  2 +-
+ tools/perf/tests/api-io.c | 33 ++++++++++++++++++++++++++++++++-
+ 2 files changed, 33 insertions(+), 2 deletions(-)
+
+diff --git a/tools/lib/api/io.h b/tools/lib/api/io.h
+index 1731996b..25e2008d 100644
+--- a/tools/lib/api/io.h
++++ b/tools/lib/api/io.h
+@@ -91,7 +91,7 @@ static inline int io__get_char(struct io *io)
+ 		if (ret)
+ 			return ret;
+ 	}
+-	return *io->data++;
++	return (unsigned char)*io->data++;
+ }
+ 
+ /* Read a hexadecimal value with no 0x prefix into the out argument hex. If the
+diff --git a/tools/perf/tests/api-io.c b/tools/perf/tests/api-io.c
+index 0ba3d5cc..f283712e 100644
+--- a/tools/perf/tests/api-io.c
++++ b/tools/perf/tests/api-io.c
+@@ -98,7 +98,7 @@ static int do_test_get_char(const char *test_string, size_t buf_size)
+ 	for (i = 0; i < strlen(test_string); i++) {
+ 		ch = io__get_char(&io);
+ 
+-		EXPECT_EQUAL(ch, test_string[i]);
++		EXPECT_EQUAL(ch, (unsigned char)test_string[i]);
+ 		EXPECT_EQUAL(io.eof, false);
+ 	}
+ 	ch = io__get_char(&io);
+@@ -118,6 +118,7 @@ static int test_get_char(void)
+ 		"12345678abcdef90",
+ 		"a\nb\nc\nd\n",
+ 		"\a\b\t\v\f\r",
++		"\x7f\x80\xfe\xff",
+ 	};
+ 	for (i = 0; i <= 10; i++) {
+ 		for (j = 0; j < ARRAY_SIZE(test_strings); j++) {
+@@ -290,6 +291,34 @@ static int test_get_dec(void)
+ 	return ret;
+ }
+ 
++static int test_get_line_non_ascii(void)
++{
++	static const char test_string[] = "a\xc3\xa9\xff\nnext\n";
++	char path[PATH_MAX];
++	struct io io;
++	char *line = NULL;
++	size_t line_len = 0;
++	int len, ret = 0;
++
++	if (setup_test(path, test_string, 2, &io))
++		return -1;
++
++	len = io__getline(&io, &line, &line_len);
++	EXPECT_EQUAL(len, 5);
++	EXPECT_EQUAL((int)line_len, 5);
++	EXPECT_EQUAL((int)strlen(line), 5);
++	if (line_len == 5)
++		EXPECT_EQUAL(memcmp(line, test_string, 5), 0);
++	len = io__getline(&io, &line, &line_len);
++	EXPECT_EQUAL(len, 5);
++	EXPECT_EQUAL((int)line_len, 5);
++	EXPECT_EQUAL(strcmp(line, "next\n"), 0);
++
++	free(line);
++	cleanup_test(path, &io);
++	return ret;
++}
++
+ static int test_get_line(void)
+ {
+ 	char path[PATH_MAX];
+@@ -337,6 +366,8 @@ static int test__api_io(struct test_suite *test __maybe_unused,
+ 		ret = TEST_FAIL;
+ 	if (test_get_line())
+ 		ret = TEST_FAIL;
++	if (test_get_line_non_ascii())
++		ret = TEST_FAIL;
+ 	return ret;
+ }
+ 
+
+base-commit: 9d66f26fefacebfeed15de31c1123451a17ff119
