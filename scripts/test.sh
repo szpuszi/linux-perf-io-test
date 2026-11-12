@@ -11,12 +11,13 @@ git -C "$SOURCE" init -q
 git -C "$SOURCE" -c protocol.version=2 fetch --depth=1 https://github.com/torvalds/linux.git "$BASE"
 git -C "$SOURCE" checkout --detach FETCH_HEAD
 test "$(git -C "$SOURCE" rev-parse HEAD)" = "$BASE"
+git -C "$SOURCE" -c protocol.version=2 fetch --depth=1 --filter=blob:none https://github.com/torvalds/linux.git e95770af4c4a280fab2080529d30452a7628d45d
 git -C "$SOURCE" rev-parse HEAD > "$LOGS/base.txt"
 sha256sum "$PATCH" > "$LOGS/patch-sha256.txt"
 gcc --version > "$LOGS/compiler.txt"
 uname -a > "$LOGS/platform.txt"
 git -C "$SOURCE" apply --check "$PATCH"
-perl "$SOURCE/scripts/checkpatch.pl" --no-tree --no-signoff --strict "$PATCH" 2>&1 | tee "$LOGS/checkpatch.log"
+(cd "$SOURCE"; perl scripts/checkpatch.pl --no-tree --no-signoff --strict "$PATCH") 2>&1 | tee "$LOGS/checkpatch.log"
 git -C "$SOURCE" apply --include=tools/perf/tests/api-io.c "$PATCH"
 
 make -C "$SOURCE/tools/perf" -j2 NO_JEVENTS=1 NO_LIBBPF=1 2>&1 | tee "$LOGS/build-before.log"
