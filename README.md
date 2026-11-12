@@ -9,3 +9,5 @@ Regression tests for high-bit bytes being mistaken for EOF when `char` is signed
 Default `perf` uses `-funsigned-char`; the regression covers standalone `libapi` and a signed-char test build.
 
 [Passing test run](https://github.com/szpuszi/linux-perf-io-test/actions/runs/43257707229) · [Patch](perf-io.patch)
+
+Patch metadata was updated after testing; the source changes are unchanged.

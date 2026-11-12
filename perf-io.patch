@@ -1,4 +1,4 @@
-From dde90bfaed0a662baaebeca0eab75e863adb6751 Mon Sep 17 00:00:00 2001
+From 8a6f646bdc0d79a9a1d6198020c05fecaeb31ce6 Mon Sep 17 00:00:00 2001
 From: Wojciech Szpucha <szpuszi@gmail.com>
 Date: Thu, 12 Nov 2026 16:58:27 +0100
 Subject: [PATCH] tools api io: Return high-bit bytes as unsigned characters
@@ -19,10 +19,8 @@ this test with -fsigned-char so that perf's global -funsigned-char does
 not hide the problem. The default perf build already avoids this issue
 through that global flag.
 
-The issue was identified and the fix and regression tests were prepared
-with Codex assistance.
-
 Fixes: e95770af4c4a ("tools api: Add a lightweight buffered reading api")
+Signed-off-by: Wojciech Szpucha <szpuszi@gmail.com>
 ---
  tools/lib/api/io.h        |  2 +-
  tools/perf/tests/Build    |  1 +
